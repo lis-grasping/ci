@@ -1,0 +1,58 @@
+name: Lint
+
+on:
+  workflow_call:
+    inputs:
+      apt-packages:
+        description: The system packages that installing the project needs, separated by spaces.
+        type: string
+        default: ""
+    secrets:
+      GRASPKIT_DEPLOY_KEY:
+        description: The private half of a read-only deploy key of graspkit, while graspkit is private.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install the system packages
+        if: inputs.apt-packages != ''
+        env:
+          PACKAGES: ${{ inputs.apt-packages }}
+        run: |
+          read -ra packages <<< "$PACKAGES"
+          sudo apt-get update
+          sudo apt-get install -y "${packages[@]}"
+      - name: Read graspkit while it is private
+        env:
+          GRASPKIT_DEPLOY_KEY: ${{ secrets.GRASPKIT_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -z "$GRASPKIT_DEPLOY_KEY" ]]; then
+            echo "No GRASPKIT_DEPLOY_KEY: graspkit is installed as a public repository."
+            exit 0
+          fi
+          key_file="$HOME/.ssh/graspkit_deploy_key"
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$GRASPKIT_DEPLOY_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          # GitHub's API publishes its host keys, so none is trusted on first use
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' >> "$HOME/.ssh/known_hosts"
+          git config --global url."ssh://git@github.com/lis-grasping/graspkit".insteadOf \
+            "https://github.com/lis-grasping/graspkit"
+          git config --global core.sshCommand "ssh -i $key_file -o IdentitiesOnly=yes"
+      - name: Install
+        run: uv sync --locked
+      - name: Check the format
+        run: uv run --locked ruff format --check
+      - name: Lint
+        run: uv run --locked ruff check
+      - name: Type check
+        run: uv run --locked ty check

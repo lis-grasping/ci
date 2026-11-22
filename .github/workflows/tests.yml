@@ -1,0 +1,112 @@
+name: Tests
+
+on:
+  workflow_call:
+    inputs:
+      pythons:
+        description: The supported Pythons, as a JSON list such as '["3.10", "3.11"]'.
+        type: string
+        required: true
+      python:
+        description: The Python of development, the only one tested unless `all` is set.
+        type: string
+        default: "3.13"
+      lowest-python:
+        description: The Python that tests the lowest versions of the dependencies.
+        type: string
+        default: "3.10"
+      all:
+        description: Whether to test every supported Python and the lowest versions.
+        type: boolean
+        default: false
+      apt-packages:
+        description: The system packages that installing and testing the project need, separated by spaces.
+        type: string
+        default: ""
+    secrets:
+      GRASPKIT_DEPLOY_KEY:
+        description: The private half of a read-only deploy key of graspkit, while graspkit is private.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ${{ fromJSON(inputs.all && inputs.pythons || format('["{0}"]', inputs.python)) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install the system packages
+        if: inputs.apt-packages != ''
+        env:
+          PACKAGES: ${{ inputs.apt-packages }}
+        run: |
+          read -ra packages <<< "$PACKAGES"
+          sudo apt-get update
+          sudo apt-get install -y "${packages[@]}"
+      - name: Read graspkit while it is private
+        env:
+          GRASPKIT_DEPLOY_KEY: ${{ secrets.GRASPKIT_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -z "$GRASPKIT_DEPLOY_KEY" ]]; then
+            echo "No GRASPKIT_DEPLOY_KEY: graspkit is installed as a public repository."
+            exit 0
+          fi
+          key_file="$HOME/.ssh/graspkit_deploy_key"
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$GRASPKIT_DEPLOY_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          # GitHub's API publishes its host keys, so none is trusted on first use
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' >> "$HOME/.ssh/known_hosts"
+          git config --global url."ssh://git@github.com/lis-grasping/graspkit".insteadOf \
+            "https://github.com/lis-grasping/graspkit"
+          git config --global core.sshCommand "ssh -i $key_file -o IdentitiesOnly=yes"
+      - name: Test
+        env:
+          PYTHON: ${{ matrix.python }}
+        run: uv run --locked --python "$PYTHON" pytest -q
+
+  lowest:
+    name: Python ${{ inputs.lowest-python }}, lowest versions
+    if: inputs.all
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install the system packages
+        if: inputs.apt-packages != ''
+        env:
+          PACKAGES: ${{ inputs.apt-packages }}
+        run: |
+          read -ra packages <<< "$PACKAGES"
+          sudo apt-get update
+          sudo apt-get install -y "${packages[@]}"
+      - name: Read graspkit while it is private
+        env:
+          GRASPKIT_DEPLOY_KEY: ${{ secrets.GRASPKIT_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -z "$GRASPKIT_DEPLOY_KEY" ]]; then
+            echo "No GRASPKIT_DEPLOY_KEY: graspkit is installed as a public repository."
+            exit 0
+          fi
+          key_file="$HOME/.ssh/graspkit_deploy_key"
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$GRASPKIT_DEPLOY_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          # GitHub's API publishes its host keys, so none is trusted on first use
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' >> "$HOME/.ssh/known_hosts"
+          git config --global url."ssh://git@github.com/lis-grasping/graspkit".insteadOf \
+            "https://github.com/lis-grasping/graspkit"
+          git config --global core.sshCommand "ssh -i $key_file -o IdentitiesOnly=yes"
+      - name: Test
+        env:
+          PYTHON: ${{ inputs.lowest-python }}
+        run: uv run --python "$PYTHON" --resolution lowest-direct pytest -q
