@@ -85,7 +85,8 @@ jobs:
           if ! grep -q '[^[:space:]]' <<< "$notes"; then
             fail "The section of $version in CHANGELOG.md is empty."
           fi
-          if read_section "## [Unreleased]" | grep -q '[^[:space:]]'; then
+          unreleased="$(read_section "## [Unreleased]")"
+          if grep -q '[^[:space:]]' <<< "$unreleased"; then
             fail "The section \`Unreleased\` of CHANGELOG.md is not empty. Move its lines to $version."
           fi
           if ! grep -Eq "^\[$escaped_version\]: " CHANGELOG.md; then
