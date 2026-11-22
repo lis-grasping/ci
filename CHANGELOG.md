@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-22
+
 ### Added
 
 - The reusable workflows `lint.yml`, `tests.yml`, `release-check.yml` and
@@ -15,4 +17,5 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   graspkit with the secret `GRASPKIT_DEPLOY_KEY`. `release-check.yml` takes the
   version from uv or from CHANGELOG.md.
 
-[Unreleased]: https://github.com/lis-grasping/ci/commits/develop
+[Unreleased]: https://github.com/lis-grasping/ci/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lis-grasping/ci/releases/tag/v0.1.0
