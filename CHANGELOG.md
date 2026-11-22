@@ -7,6 +7,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/add-deploy-keys.sh`, moved from graspkit, which creates graspkit's
+  read-only deploy key and sets it as the secret `GRASPKIT_DEPLOY_KEY` of every
+  repository that installs graspkit.
+
 ## [0.1.0] - 2026-11-22
 
 ### Added

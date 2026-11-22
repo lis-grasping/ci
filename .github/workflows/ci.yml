@@ -11,14 +11,16 @@ permissions:
 
 jobs:
   lint:
-    name: Lint the workflows
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: Lint
+      - name: Lint the workflows
         # With shellcheck on the path, actionlint also checks the scripts of `run`
         run: uvx --from actionlint-py==1.7.12.25 --with shellcheck-py==0.11.0.1 actionlint
+      - name: Lint the scripts
+        run: uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
 
   release-check:
     if: github.ref == 'refs/heads/main' || github.base_ref == 'main'

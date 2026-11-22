@@ -64,9 +64,10 @@ release from the version's section of `CHANGELOG.md`.
 | `release.yml` | `tag`, `title`, `notes` |
 
 While graspkit is private, `lint.yml` and `tests.yml` read it with the secret
-`GRASPKIT_DEPLOY_KEY`, the private half of a read-only deploy key of graspkit, which
-graspkit's `scripts/add-deploy-keys.sh` sets. Without it they install graspkit as a
-public repository.
+`GRASPKIT_DEPLOY_KEY`, the private half of a read-only deploy key of graspkit. Without
+it they install graspkit as a public repository. `scripts/add-deploy-keys.sh` creates
+the key and sets the secret in every repository that installs graspkit; it needs `gh`
+logged in as an owner of the organization.
 
 ## Release
 
