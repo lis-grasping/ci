@@ -1,0 +1,102 @@
+name: Release check
+
+# A release comes from `develop` and sets a new version with a dated section in
+# CHANGELOG.md, whose notes become the release's.
+on:
+  workflow_call:
+    inputs:
+      version-source:
+        description: Where the version comes from, `uv` for the project's version or `changelog` for the newest dated section of CHANGELOG.md.
+        type: string
+        default: uv
+    outputs:
+      version:
+        description: The version to release.
+        value: ${{ jobs.check.outputs.version }}
+      tag:
+        description: The tag of the version, `v<version>`.
+        value: ${{ jobs.check.outputs.tag }}
+      notes:
+        description: The version's section of CHANGELOG.md.
+        value: ${{ jobs.check.outputs.notes }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Release check
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+      notes: ${{ steps.check.outputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Check the source branch
+        if: github.event_name == 'pull_request' && github.head_ref != 'develop'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          echo "::error::A pull request into main comes from develop, not $HEAD_REF."
+          exit 1
+      - name: Check the version and the changelog
+        id: check
+        env:
+          VERSION_SOURCE: ${{ inputs.version-source }}
+        run: |
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          # Print the lines of a changelog section, from below its heading to the next one
+          read_section() {
+            awk -v heading="$1" '
+              index($0, heading) == 1 { found = 1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            ' CHANGELOG.md
+          }
+
+          case "$VERSION_SOURCE" in
+            uv)
+              version="$(uv version --short --color never)"
+              ;;
+            changelog)
+              version="$(sed -nE 's/^## \[([^]]+)\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$/\1/p' CHANGELOG.md | head -n 1)"
+              [[ -n "$version" ]] || fail "CHANGELOG.md has no section \`## [<version>] - <date>\`."
+              ;;
+            *)
+              fail "Unknown version-source \`$VERSION_SOURCE\`. Use \`uv\` or \`changelog\`."
+              ;;
+          esac
+          tag="v$version"
+          escaped_version="${version//./\\.}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            fail "The version $version is released already. Set the next one."
+          fi
+          if ! grep -Eq "^## \[$escaped_version\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md; then
+            fail "CHANGELOG.md has no section \`## [$version] - <date>\`."
+          fi
+          notes="$(read_section "## [$version]")"
+          if ! grep -q '[^[:space:]]' <<< "$notes"; then
+            fail "The section of $version in CHANGELOG.md is empty."
+          fi
+          if read_section "## [Unreleased]" | grep -q '[^[:space:]]'; then
+            fail "The section \`Unreleased\` of CHANGELOG.md is not empty. Move its lines to $version."
+          fi
+          if ! grep -Eq "^\[$escaped_version\]: " CHANGELOG.md; then
+            fail "CHANGELOG.md has no link \`[$version]: ...\` at its bottom."
+          fi
+
+          echo "The version $version is ready to release as $tag."
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "notes<<RELEASE_NOTES_END"
+            echo "$notes"
+            echo "RELEASE_NOTES_END"
+          } >> "$GITHUB_OUTPUT"
